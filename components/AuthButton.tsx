@@ -5,10 +5,6 @@ import Image from 'next/image';
 export default function AuthButton() {
   const { data: session, status } = useSession();
 
-  if (status === 'loading') {
-    return <div className="w-8 h-8 rounded-full bg-gray-700 animate-pulse" />;
-  }
-
   if (session?.user) {
     return (
       <div className="flex items-center gap-2">
