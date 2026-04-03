@@ -69,48 +69,84 @@ async function ensureSchema(): Promise<void> {
   try {
     await execute('SELECT user_id FROM book_progress LIMIT 0');
   } catch {
-    // Column missing — drop old table so we can recreate with new schema
     await execute('DROP TABLE IF EXISTS book_progress');
-    await execute(`
-      CREATE TABLE book_progress (
-        user_id   TEXT    NOT NULL,
-        book_id   INTEGER NOT NULL,
-        is_read   INTEGER DEFAULT 0,
-        rating    INTEGER,
-        read_date TEXT,
-        PRIMARY KEY (user_id, book_id)
-      )
-    `);
   }
+  // Create with full schema
+  await execute(`
+    CREATE TABLE IF NOT EXISTS book_progress (
+      user_id   TEXT    NOT NULL,
+      book_id   INTEGER NOT NULL,
+      is_read   INTEGER DEFAULT 0,
+      status    TEXT    DEFAULT 'unread',
+      rating    INTEGER,
+      read_date TEXT,
+      notes     TEXT,
+      PRIMARY KEY (user_id, book_id)
+    )
+  `);
+  // Add new columns to existing tables (silently no-op if already present)
+  try { await execute("ALTER TABLE book_progress ADD COLUMN status TEXT DEFAULT 'unread'"); } catch {}
+  try { await execute("ALTER TABLE book_progress ADD COLUMN notes TEXT"); } catch {}
+  // Migrate: existing is_read=1 rows that haven't been given a status yet
+  await execute("UPDATE book_progress SET status = 'read' WHERE is_read = 1 AND (status IS NULL OR status = 'unread')");
   schemaReady = true;
 }
 
 export interface BookProgress {
   book_id: number;
   is_read: number;
+  status: 'unread' | 'reading' | 'read';
   rating: number | null;
   read_date: string | null;
+  notes: string | null;
 }
 
 export async function getAllProgress(userId: string): Promise<BookProgress[]> {
   await ensureSchema();
-  const result = await execute('SELECT book_id, is_read, rating, read_date FROM book_progress WHERE user_id = ?', [userId]);
+  const result = await execute(
+    'SELECT book_id, is_read, status, rating, read_date, notes FROM book_progress WHERE user_id = ?',
+    [userId],
+  );
   return toRows<BookProgress>(result);
 }
 
-export async function upsertProgress(userId: string, bookId: number, isRead: boolean, rating?: number): Promise<void> {
+export async function getOneProgress(userId: string, bookId: number): Promise<BookProgress | null> {
   await ensureSchema();
+  const result = await execute(
+    'SELECT book_id, is_read, status, rating, read_date, notes FROM book_progress WHERE user_id = ? AND book_id = ?',
+    [userId, bookId],
+  );
+  const rows = toRows<BookProgress>(result);
+  return rows[0] ?? null;
+}
+
+export async function upsertProgress(
+  userId: string,
+  bookId: number,
+  status: 'unread' | 'reading' | 'read',
+  rating?: number | null,
+  notes?: string | null,
+): Promise<void> {
+  await ensureSchema();
+  const isRead = status === 'read' ? 1 : 0;
   await execute(
-    `INSERT INTO book_progress (user_id, book_id, is_read, rating, read_date)
-     VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO book_progress (user_id, book_id, is_read, status, rating, read_date, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id, book_id) DO UPDATE SET
        is_read   = excluded.is_read,
-       rating    = COALESCE(excluded.rating, rating),
+       status    = excluded.status,
+       rating    = CASE WHEN excluded.rating IS NOT NULL THEN excluded.rating ELSE rating END,
        read_date = CASE
-         WHEN excluded.is_read = 1 AND book_progress.is_read = 0
+         WHEN excluded.status = 'read' AND book_progress.status != 'read'
          THEN excluded.read_date
          ELSE book_progress.read_date
-       END`,
-    [userId, bookId, isRead ? 1 : 0, rating ?? null, isRead ? new Date().toISOString() : null],
+       END,
+       notes     = CASE WHEN excluded.notes IS NOT NULL THEN excluded.notes ELSE notes END`,
+    [
+      userId, bookId, isRead, status,
+      rating ?? null,
+      status === 'read' ? new Date().toISOString() : null,
+      notes ?? null,
+    ],
   );
 }

@@ -1,18 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,300;1,8..60,400&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #0f0f14;
-  --foreground: #ededed;
+  --nyt-black: #121212;
+  --nyt-red: #d0021b;
+  --nyt-gray-bg: #f7f7f5;
+  --nyt-border: #e2e2e2;
+  --nyt-secondary: #6b6b6b;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-  min-height: 100vh;
+  background: #ffffff;
+  color: var(--nyt-black);
+  font-family: 'Source Serif 4', Georgia, serif;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Line clamp utility */
+.font-headline {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+}
+
+.font-ui {
+  font-family: 'Arial Narrow', Arial, sans-serif;
+  letter-spacing: 0.03em;
+}
+
+.font-ui-caps {
+  font-family: 'Arial Narrow', Arial, sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -25,21 +49,4 @@ body {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-/* Smooth transitions */
-* {
-  transition-property: color, background-color, border-color, opacity, transform, box-shadow;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
-/* Progress bar animation */
-@keyframes progressFill {
-  from { width: 0%; }
-  to { width: var(--progress-width); }
-}
-
-.animate-progress {
-  animation: progressFill 1s ease-out forwards;
 }

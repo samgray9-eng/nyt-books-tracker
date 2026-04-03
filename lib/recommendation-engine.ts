@@ -43,7 +43,7 @@ export function computeTasteProfile(
   books: Book[],
   progressMap: Record<number, BookProgress>,
 ): TasteProfile {
-  const rated = books.filter(b => progressMap[b.id]?.is_read === 1 && progressMap[b.id]?.rating != null);
+  const rated = books.filter(b => progressMap[b.id]?.status === 'read' && progressMap[b.id]?.rating != null);
   if (rated.length === 0) return { favoriteGenre: null, topTags: [], preferredEra: null, avgRating: 0, summary: '' };
 
   const idf = computeIDF(books);
@@ -92,17 +92,17 @@ export function computeRecommendations(
   books: Book[],
   progressMap: Record<number, BookProgress>,
 ): RecommendationResult[] {
-  const rated = books.filter(b => progressMap[b.id]?.is_read === 1 && progressMap[b.id]?.rating != null);
+  const rated = books.filter(b => progressMap[b.id]?.status === 'read' && progressMap[b.id]?.rating != null);
   if (rated.length === 0) return [];
 
   const idf = computeIDF(books);
 
-  const unread = books.filter(b => !progressMap[b.id] || progressMap[b.id].is_read === 0);
+  const unread = books.filter(b => !progressMap[b.id] || progressMap[b.id].status === 'unread');
 
   // Diversity: how many books have been READ per genre/author
   const readGenreCounts: Record<string, number> = {};
   const readAuthorCounts: Record<string, number> = {};
-  books.filter(b => progressMap[b.id]?.is_read === 1).forEach(b => {
+  books.filter(b => progressMap[b.id]?.status === 'read').forEach(b => {
     readGenreCounts[b.genre] = (readGenreCounts[b.genre] ?? 0) + 1;
     readAuthorCounts[b.author] = (readAuthorCounts[b.author] ?? 0) + 1;
   });

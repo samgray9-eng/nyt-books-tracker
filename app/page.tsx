@@ -34,33 +34,33 @@ export default function Home() {
     }
   }, []);
 
-  // Fetch immediately on mount — API returns [] for unauthenticated users
   useEffect(() => {
     fetchProgress();
   }, [fetchProgress]);
 
-  // Re-fetch once auth resolves so a signed-in user sees their actual data
   useEffect(() => {
     if (status === 'authenticated') fetchProgress();
     if (status === 'unauthenticated') { setProgressMap({}); setLoading(false); }
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleToggleRead = async (bookId: number, isRead: boolean) => {
+  const handleSetStatus = async (bookId: number, newStatus: 'unread' | 'reading' | 'read') => {
     if (!session?.user) { setShowLoginPrompt(true); return; }
     setProgressMap((prev) => ({
       ...prev,
       [bookId]: {
         book_id: bookId,
-        is_read: isRead ? 1 : 0,
+        is_read: newStatus === 'read' ? 1 : 0,
+        status: newStatus,
         rating: prev[bookId]?.rating ?? null,
-        read_date: isRead ? new Date().toISOString() : null,
+        read_date: newStatus === 'read' ? new Date().toISOString() : (prev[bookId]?.read_date ?? null),
+        notes: prev[bookId]?.notes ?? null,
       },
     }));
     try {
       const res = await fetch(`/api/books/${bookId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_read: isRead }),
+        body: JSON.stringify({ status: newStatus }),
       });
       if (!res.ok) throw new Error('Failed');
     } catch (err) {
@@ -75,16 +75,18 @@ export default function Home() {
       ...prev,
       [bookId]: {
         book_id: bookId,
-        is_read: prev[bookId]?.is_read ?? 1,
+        is_read: 1,
+        status: 'read',
         rating,
         read_date: prev[bookId]?.read_date ?? new Date().toISOString(),
+        notes: prev[bookId]?.notes ?? null,
       },
     }));
     try {
       const res = await fetch(`/api/books/${bookId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_read: true, rating }),
+        body: JSON.stringify({ status: 'read', rating }),
       });
       if (!res.ok) throw new Error('Failed');
     } catch (err) {
@@ -93,8 +95,9 @@ export default function Home() {
     }
   };
 
-  const readCount = Object.values(progressMap).filter((p) => p.is_read === 1).length;
-  const ratedBooks = Object.values(progressMap).filter((p) => p.is_read === 1 && p.rating != null);
+  const readCount = Object.values(progressMap).filter((p) => p.status === 'read').length;
+  const readingCount = Object.values(progressMap).filter((p) => p.status === 'reading').length;
+  const ratedBooks = Object.values(progressMap).filter((p) => p.status === 'read' && p.rating != null);
   const averageRating = ratedBooks.length > 0
     ? ratedBooks.reduce((sum, p) => sum + (p.rating ?? 0), 0) / ratedBooks.length
     : null;
@@ -105,83 +108,78 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen" style={{ background: '#0f0f14' }}>
+    <div className="min-h-screen bg-white">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-gray-800/80" style={{ background: 'rgba(15, 15, 20, 0.95)', backdropFilter: 'blur(12px)' }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                <span className="text-indigo-400">NYT</span> 100 Best Books
-              </h1>
-              <p className="text-xs text-gray-500 mt-0.5">21st Century Reading Tracker</p>
-            </div>
-            <div className="flex items-center gap-4">
+      <header className="bg-white border-b-2 border-[#121212] sticky top-0 z-50">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-baseline gap-4">
+              <div>
+                <span className="font-ui-caps text-[#d0021b] block text-xs">The New York Times</span>
+                <h1 className="font-headline text-2xl font-bold text-[#121212] leading-none">
+                  100 Best Books of the 21st Century
+                </h1>
+              </div>
               {!loading && session && (
-                <div className="hidden sm:flex items-center gap-2 text-sm">
-                  <span className="text-gray-400">{readCount}/100 read</span>
-                  <div className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-indigo-500 transition-all duration-500"
-                      style={{ width: `${readCount}%` }}
-                    />
-                  </div>
-                </div>
+                <span className="font-ui-caps text-[#6b6b6b] hidden sm:block">
+                  {readCount} / 100 Read
+                </span>
               )}
-              <AuthButton />
             </div>
+            <AuthButton />
           </div>
         </div>
+        {/* Red rule */}
+        <div className="h-0.5 bg-[#d0021b]" />
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        {/* Summary bar (only when signed in) */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+        {/* Summary bar */}
         {!loading && session && (
-          <SummaryBar readCount={readCount} totalCount={100} averageRating={averageRating} />
+          <SummaryBar readCount={readCount} totalCount={100} averageRating={averageRating} readingCount={readingCount} />
         )}
 
-        {/* Sign-in banner (when not authenticated) */}
+        {/* Sign-in banner */}
         {status !== 'loading' && !session && (
-          <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 flex items-center justify-between gap-4 flex-wrap">
+          <div className="border border-[#e2e2e2] p-4 flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p className="text-sm font-medium text-gray-200">Track your reading progress</p>
-              <p className="text-xs text-gray-500 mt-0.5">Sign in to mark books as read, rate them, and get recommendations.</p>
+              <p className="font-headline font-bold text-[#121212]">Track your reading progress</p>
+              <p className="text-sm text-[#6b6b6b] mt-0.5" style={{ fontFamily: "'Source Serif 4', Georgia, serif" }}>
+                Log in to mark books as read, rate them, and get personalised recommendations.
+              </p>
             </div>
             <button
               onClick={() => signIn('google')}
-              className="flex items-center gap-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg px-4 py-2 transition-colors whitespace-nowrap"
+              className="font-ui-caps text-[#d0021b] border border-[#d0021b] px-4 py-2 hover:bg-[#d0021b] hover:text-white transition-colors whitespace-nowrap"
             >
-              Sign in with Google
+              Log In
             </button>
           </div>
         )}
 
+        {/* Loading */}
         {loading && (
-          <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-8 text-center">
-            <div className="inline-block w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-gray-400">Loading your reading progress...</p>
+          <div className="py-16 text-center">
+            <div className="inline-block w-8 h-8 border-2 border-[#d0021b] border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="font-ui-caps text-[#6b6b6b]">Loading</p>
           </div>
         )}
 
-        {/* Tab navigation */}
-        <div className="flex gap-1 border-b border-gray-700/50">
+        {/* Tabs */}
+        <div className="flex gap-0 border-b border-[#e2e2e2]">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`
-                px-5 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px
-                ${activeTab === tab.id
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
-                }
-              `}
+              className={`font-ui-caps px-4 py-2 border-b-2 transition-colors -mb-px mr-4 ${
+                activeTab === tab.id
+                  ? 'border-[#d0021b] text-[#d0021b]'
+                  : 'border-transparent text-[#6b6b6b] hover:text-[#121212]'
+              }`}
             >
               {tab.label}
               {tab.id === 'recommendations' && ratedBooks.length > 0 && (
-                <span className="ml-2 text-xs bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-full px-1.5 py-0.5">
-                  {ratedBooks.length}
-                </span>
+                <span className="ml-1.5 font-ui-caps text-[#d0021b]">{ratedBooks.length}</span>
               )}
             </button>
           ))}
@@ -191,20 +189,10 @@ export default function Home() {
         {!loading && (
           <>
             {activeTab === 'browse' && (
-              <BrowseTab
-                books={BOOKS}
-                progressMap={progressMap}
-                onToggleRead={handleToggleRead}
-                onRate={handleRate}
-              />
+              <BrowseTab books={BOOKS} progressMap={progressMap} onSetStatus={handleSetStatus} onRate={handleRate} />
             )}
             {activeTab === 'recommendations' && (
-              <RecommendationsTab
-                books={BOOKS}
-                progressMap={progressMap}
-                onToggleRead={handleToggleRead}
-                onRate={handleRate}
-              />
+              <RecommendationsTab books={BOOKS} progressMap={progressMap} onSetStatus={handleSetStatus} onRate={handleRate} />
             )}
           </>
         )}
@@ -212,15 +200,17 @@ export default function Home() {
 
       {/* Login prompt toast */}
       {showLoginPrompt && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-gray-800 border border-gray-600 rounded-xl px-5 py-3 shadow-2xl">
-          <span className="text-sm text-gray-300">Sign in to track your reading progress</span>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 bg-white border border-[#121212] px-5 py-3">
+          <span className="text-sm text-[#121212]" style={{ fontFamily: "'Source Serif 4', Georgia, serif" }}>
+            Log in to track your reading progress
+          </span>
           <button
             onClick={() => signIn('google')}
-            className="text-sm font-semibold text-indigo-400 hover:text-indigo-300 whitespace-nowrap"
+            className="font-ui-caps text-[#d0021b] underline underline-offset-2 hover:text-[#121212] transition-colors whitespace-nowrap"
           >
-            Sign in →
+            Log In →
           </button>
-          <button onClick={() => setShowLoginPrompt(false)} className="text-gray-500 hover:text-gray-300 ml-1 text-xs">✕</button>
+          <button onClick={() => setShowLoginPrompt(false)} className="font-ui-caps text-[#6b6b6b] hover:text-[#121212] ml-1 text-xs">✕</button>
         </div>
       )}
     </div>
